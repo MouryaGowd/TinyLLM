@@ -1,0 +1,40 @@
+Hello, how are you?
+What is your name?
+What is the weather today?
+Tell me a joke.
+What is the capital of France?
+How do I learn to code?
+Can you help me with my homework?
+What time is it?
+Who won the football match?
+Explain how a computer works.
+What is two plus two?
+Do you like pizza?
+Where is the nearest hospital?
+What is the meaning of life?
+Write me a poem about the sea.
+How old are you?
+Are you a robot?
+Thanks for your help!
+I am feeling a bit tired today.
+What movie should I watch tonight?
+How do I make a cup of tea?
+Can you speak English?
+Tell me about yourself.
+What is artificial intelligence?
+Where do you live?
+What is your favourite colour?
+How far is the moon?
+Please summarise this paragraph.
+Good morning, what's up?
+I need a job. Any advice?
+Is it going to rain tomorrow?
+What is a transformer model?
+Translate hello into Spanish.
+How many days are in a year?
+What is the price of gold?
+Can I borrow your phone?
+I lost my keys.
+That's awesome, thanks!
+See you later, bye!
+What's your opinion on social media?

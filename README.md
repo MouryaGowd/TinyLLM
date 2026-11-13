@@ -12,6 +12,8 @@ character-by-character on the Tiny Shakespeare dataset. It runs on a laptop (App
 | `generate.py` | Load a checkpoint and generate text from a prompt                 |
 | `chat.py`     | Interactive terminal chat (you and the model trade lines of a play script) |
 | `evaluate.py` | Full-validation loss, bigram baseline and generated-word statistics |
+| `prompts/`    | 467 test prompts (famous lines, old-style questions, test lines, modern lines) |
+| `run_prompts.py` | Run a whole prompt file through the chat model and save the replies |
 | `ckpt.pt`     | Trained weights (best validation checkpoint, 44.6 MB)             |
 | `*.bat`, `run.sh` | One-click launchers for Windows and macOS/Linux              |
 | `paper/`      | IEEE-format paper (PDF/HTML/LaTeX), architecture diagrams, figure script |
