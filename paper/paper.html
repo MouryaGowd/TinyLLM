@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TinyGPT: A Character-Level Transformer Language Model Trained from Scratch on Consumer Hardware</title>
+<style>
+  @page { size: letter; margin: 0.75in 0.625in 1in 0.625in; }
+  html { font-family: "Times New Roman", Times, serif; font-size: 10pt; color: #000; }
+  body { margin: 0; }
+  .paper { column-count: 2; column-gap: 0.25in; text-align: justify; hyphens: auto; line-height: 1.22; }
+  .head { column-span: all; text-align: center; margin-bottom: 10pt; }
+  .head h1 { font-size: 22pt; font-weight: normal; line-height: 1.15; margin: 0 0 12pt; }
+  .authors { font-size: 11pt; line-height: 1.35; }
+  .authors i { font-size: 9.5pt; }
+  .abstract { font-weight: bold; font-size: 9pt; line-height: 1.2; }
+  .keywords { font-weight: bold; font-style: italic; font-size: 9pt; margin-top: 5pt; }
+  h2 { font-size: 10pt; font-weight: normal; text-transform: uppercase; text-align: center;
+       margin: 11pt 0 5pt; break-after: avoid; }
+  h3 { font-size: 10pt; font-weight: normal; font-style: italic; margin: 7pt 0 3pt; break-after: avoid; }
+  p { margin: 0 0 5pt; text-indent: 0.2in; }
+  p.ni { text-indent: 0; }
+  figure { margin: 6pt 0; break-inside: avoid; text-align: center; }
+  figure.wide { column-span: all; margin: 8pt 0; }
+  figure img { max-width: 100%; }
+  figcaption, .tcap { font-size: 8.5pt; line-height: 1.2; text-align: justify; }
+  figcaption { text-align: center; margin-top: 3pt; }
+  .tcap { text-align: center; text-transform: none; margin-bottom: 3pt; }
+  .tcap b { font-weight: normal; font-variant: small-caps; }
+  table { border-collapse: collapse; margin: 0 auto 8pt; font-size: 8.5pt; break-inside: avoid; }
+  th, td { padding: 1.5pt 5pt; text-align: center; }
+  thead tr { border-top: 1.2px solid #000; border-bottom: 0.8px solid #000; }
+  tbody tr:last-child { border-bottom: 1.2px solid #000; }
+  td.l, th.l { text-align: left; }
+  td.sum { border-top: 0.6px solid #000; }
+  .tbl { break-inside: avoid; }
+  ul, ol { margin: 0 0 5pt; padding-left: 0.28in; }
+  li { margin-bottom: 2pt; }
+  pre { font-family: "Courier New", monospace; font-size: 7.6pt; line-height: 1.2; margin: 3pt 0 6pt;
+        text-align: left; white-space: pre-wrap; background: #f4f4f4; padding: 3pt 4pt; break-inside: avoid; }
+  .eq { text-align: center; margin: 4pt 0; font-style: italic; break-inside: avoid; }
+  .eq span.n { float: right; font-style: normal; }
+  code { font-family: "Courier New", monospace; font-size: 8.4pt; }
+  .refs { font-size: 8pt; line-height: 1.2; text-align: left; }
+  .refs p { text-indent: -0.28in; padding-left: 0.28in; margin: 0 0 2.5pt; }
+</style>
+</head>
+<body>
+<div class="paper">
+
+<div class="head">
+  <h1>TinyGPT: A Character-Level Transformer Language Model Trained from Scratch on Consumer Hardware</h1>
+  <div class="authors">
+    [Author Name]<br>
+    <i>[Department, Institution]</i><br>
+    <i>[City, Country] &mdash; [email address]</i>
+  </div>
+</div>
+
+<div class="abstract" style="margin-bottom:6pt">
+<i>Abstract</i>&mdash;We present TinyGPT, a decoder-only transformer language model with 10.76 million parameters
+(6 layers, 6 attention heads, 384-dimensional embeddings, 256-character context), implemented from scratch in PyTorch and
+trained on the 1.1-million-character Tiny Shakespeare corpus in 27 minutes on a laptop GPU. On the held-out split it reaches
+1.50 nats/character (2.16 bits/character, perplexity 4.47), compared with 2.48 nats for a character-bigram baseline and 4.17
+for a uniform guess. We document the training dynamics, including overfitting after roughly 41 passes over the data; measure
+how sampling temperature trades lexical validity against diversity; and describe an interactive chat front end that frames
+user input as lines of a play script, together with one-click launchers for Windows, macOS and Linux. The model imitates the style and
+formatting of its corpus but does not produce coherent sentences, and we state the limitations of this single-run study.
+</div>
+<div class="keywords">Index Terms&mdash;language model, transformer, self-attention, character-level modeling, text generation.</div>
+
+<h2>I. Introduction</h2>
+<p class="ni">Transformer language models [1], [2] now underpin most text-generation systems, but their scale hides the mechanisms
+involved. A model small enough to train on a laptop in under half an hour exposes the full pipeline&mdash;tokenization, causal
+self-attention, optimization, sampling&mdash;to inspection and experiment. This paper documents such a model and evaluates it
+quantitatively. Our contributions are:</p>
+<ol>
+  <li>A from-scratch decoder-only transformer (Section III) whose attention, blocks and sampler are written directly in
+  PyTorch [13] without a transformer library.</li>
+  <li>An evaluation against uniform and bigram baselines on the complete held-out split, with an analysis of overfitting
+  (Section V).</li>
+  <li>A measurement of how sampling temperature affects lexical validity and diversity of generated text.</li>
+  <li>An interactive &ldquo;play-script&rdquo; chat interface and launchers that select CUDA, Apple MPS or CPU automatically
+  (Section VI).</li>
+</ol>
+
+<h2>II. Related Work</h2>
+<p class="ni">The transformer [1] replaced recurrence with self-attention; GPT-2 [2] showed that a decoder-only stack trained for next-token
+prediction scales to broad text generation. Our design follows the compact style of nanoGPT [3] and uses the Tiny Shakespeare
+corpus distributed with char-rnn [4]. Al-Rfou <i>et&nbsp;al.</i> [5] demonstrated that deep self-attention models operate
+effectively on characters; we use the same granularity for its tiny vocabulary. Individual components are standard: pre-layer
+normalization [6], [14], residual connections [15], GELU activations [8], weight tying between input and output embeddings [7],
+dropout [10], and the AdamW optimizer [9]. Generation uses temperature scaling with top-<i>k</i> truncation [11]; nucleus
+sampling [12] is a common alternative that we do not evaluate.</p>
+
+
+
+<h2>III. Model Architecture</h2>
+<p class="ni">The model maps a sequence of character indices <i>x</i><sub>1..<i>T</i></sub> (<i>T</i>&nbsp;&le;&nbsp;256) to logits over a
+65-symbol vocabulary. The input representation is the sum of a token embedding and a learned absolute position embedding,
+followed by dropout:</p>
+<div class="eq">h<sub>0</sub> = Dropout(E[x] + P[0..T&minus;1]) <span class="n">(1)</span></div>
+<p>Each of the <i>L</i>&nbsp;=&nbsp;6 blocks applies pre-LayerNorm self-attention and a feed-forward network, each wrapped in a residual connection:</p>
+<div class="eq">h&prime; = h + MHA(LN(h)),&nbsp;&nbsp; h&Prime; = h&prime; + MLP(LN(h&prime;)) <span class="n">(2)</span></div>
+<p>Attention uses 6 heads of dimension 64. Queries, keys and values come from one fused linear layer (384&rarr;1152, no bias). Scores are
+scaled and masked so position <i>t</i> attends only to positions &le;&nbsp;<i>t</i>:</p>
+<div class="eq">Attn(Q,K,V) = softmax(QK<sup>T</sup>/&radic;d<sub>k</sub> + M) V <span class="n">(3)</span></div>
+<p>where <i>M</i><sub><i>ij</i></sub> = 0 for <i>j</i>&nbsp;&le;&nbsp;<i>i</i> and &minus;&infin; otherwise. Dropout (0.2) is applied to the attention
+weights and the attention output. The MLP is 384&rarr;1536&rarr;384 with a GELU non-linearity and dropout on its output. A final LayerNorm
+precedes a linear layer that produces logits; this layer shares its weight matrix with the token embedding [7]:</p>
+<div class="eq">logits = LN<sub>f</sub>(h<sub>L</sub>) E<sup>T</sup> <span class="n">(4)</span></div>
+<p>Linear and embedding weights are initialized from <i>N</i>(0, 0.02<sup>2</sup>) with zero biases. The model has 10,761,600 parameters;
+Table&nbsp;I shows where they reside. Because the vocabulary is only 65 symbols, the embeddings are negligible and 98.9% of the parameters
+are in the transformer blocks.</p>
+
+<div class="tbl">
+<div class="tcap"><b>Table I</b><br><b>Parameter breakdown</b></div>
+<table>
+<thead><tr><th class="l">Component</th><th>Parameters</th></tr></thead>
+<tbody>
+<tr><td class="l">Token embedding (tied with output layer)</td><td>24,960</td></tr>
+<tr><td class="l">Position embedding</td><td>98,304</td></tr>
+<tr><td class="l">Per block: attention (QKV + projection)</td><td>589,824</td></tr>
+<tr><td class="l">Per block: MLP</td><td>1,181,568</td></tr>
+<tr><td class="l">Per block: two LayerNorms</td><td>1,536</td></tr>
+<tr><td class="l">&nbsp;&nbsp;&nbsp;Block total (&times; 6 = 10,637,568)</td><td>1,772,928</td></tr>
+<tr><td class="l">Final LayerNorm</td><td>768</td></tr>
+<tr><td class="l sum"><b>Total</b></td><td class="sum"><b>10,761,600</b></td></tr>
+</tbody></table>
+</div>
+
+<figure class="wide">
+  <img src="architecture_wide.png" alt="TinyGPT architecture" style="width:100%">
+  <figcaption>Fig. 1. TinyGPT architecture. Token and learned position embeddings feed six identical pre-LayerNorm transformer
+  blocks (causal self-attention and MLP, each with a residual connection). A final LayerNorm and linear layer produce logits over
+  65 characters; the linear layer shares its weights with the token embedding. Sampled characters are appended to the context.</figcaption>
+</figure>
+
+<h2>IV. Training Setup</h2>
+<h3>A. Data and objective</h3>
+<p class="ni">We use Tiny Shakespeare [4]: 1,115,394 characters with 65 distinct symbols, tokenized at the character level. The first 90%
+(1,003,854 characters) is used for training and the final 10% (111,540 characters) for validation; the split is contiguous and
+unshuffled, so validation text is a different stretch of the plays. The objective is cross-entropy on next-character prediction;
+targets are the inputs shifted by one position, so a 256-character window supplies 256 training examples.</p>
+<h3>B. Optimization</h3>
+<p class="ni">Each step samples 32 random 256-character windows (8,192 tokens). We use AdamW [9] at a constant learning rate of 3&times;10<sup>&minus;4</sup>
+(default weight decay 0.01) with gradient-norm clipping at 1.0, and no warmup or decay schedule. Training ran for 5,000 steps, i.e.
+40.96&nbsp;M tokens or about 41 passes over the training split. Every 250 steps, validation loss was estimated on 50 random batches and
+the checkpoint was saved whenever this estimate improved. The random seed was fixed (1337). Table&nbsp;II lists the settings.</p>
+
+<div class="tbl">
+<div class="tcap"><b>Table II</b><br><b>Hyperparameters and environment</b></div>
+<table>
+<tbody>
+<tr><td class="l">Layers / heads / embedding</td><td>6 / 6 / 384</td></tr>
+<tr><td class="l">Context length</td><td>256 characters</td></tr>
+<tr><td class="l">Dropout</td><td>0.2</td></tr>
+<tr><td class="l">Batch size</td><td>32 &times; 256 tokens</td></tr>
+<tr><td class="l">Optimizer, learning rate</td><td>AdamW, 3&times;10<sup>&minus;4</sup></td></tr>
+<tr><td class="l">Gradient clipping</td><td>1.0 (norm)</td></tr>
+<tr><td class="l">Training steps</td><td>5,000</td></tr>
+<tr><td class="l">Hardware</td><td>Apple M1 Pro, 32 GB</td></tr>
+<tr><td class="l">Backend, precision</td><td>PyTorch 2.15 (MPS), fp32</td></tr>
+<tr><td class="l">Wall-clock time</td><td>1,640 s (&asymp;0.33 s/step)</td></tr>
+</tbody></table>
+</div>
+
+<h2>V. Experiments and Results</h2>
+<h3>A. Language-modeling quality</h3>
+<p class="ni">Training loss fell from 4.20 at initialization&mdash;close to the uniform value ln&nbsp;65&nbsp;=&nbsp;4.17&mdash;to 1.13 at step 5,000
+(Fig.&nbsp;2). The periodic validation estimate reached its minimum of 1.48 at step 4,000 and then drifted to 1.49, while training loss
+kept falling, a standard signature of overfitting after about 41 epochs. The checkpoint from step 4,000 was kept.</p>
+<p>Because that estimate uses random batches, we re-evaluated the saved checkpoint on the entire validation split using
+non-overlapping 256-character windows (111,360 characters scored). Table&nbsp;III compares it with two baselines trained on the same
+split: a uniform distribution and a character-bigram model with add-one smoothing. TinyGPT reduces the loss by 40% relative to the bigram
+model; its perplexity of 4.47 means it is on average as uncertain as a uniform choice among about 4.5 characters.</p>
+
+<div class="tbl">
+<div class="tcap"><b>Table III</b><br><b>Held-out loss on the full validation split</b></div>
+<table>
+<thead><tr><th class="l">Model</th><th>nats/char</th><th>bits/char</th><th>Perplexity</th></tr></thead>
+<tbody>
+<tr><td class="l">Uniform</td><td>4.174</td><td>6.022</td><td>65.00</td></tr>
+<tr><td class="l">Bigram (add-one)</td><td>2.482</td><td>3.581</td><td>11.96</td></tr>
+<tr><td class="l"><b>TinyGPT (this work)</b></td><td><b>1.498</b></td><td><b>2.160</b></td><td><b>4.47</b></td></tr>
+</tbody></table>
+</div>
+
+<figure>
+  <img src="loss_curve.png" alt="Training and validation loss" style="width:100%">
+  <figcaption>Fig. 2. Training and validation loss (50-batch estimates logged every 250 steps). The validation minimum (1.48) occurs at
+  step 4,000, after which the train&ndash;validation gap widens.</figcaption>
+</figure>
+
+<h3>B. Effect of sampling temperature</h3>
+<p class="ni">We generated 8 sequences of 1,000 characters at each temperature (top-<i>k</i>&nbsp;=&nbsp;40, fixed seed) and measured (a) the share of
+generated words that occur in the training split and (b) the share of generated word tokens that are distinct. Table&nbsp;IV shows a clear
+trade-off: low temperature yields almost only valid words but heavily repeats them, while high temperature increases diversity at the
+cost of invented words. Note that validity can exceed the 94.3% of real held-out words found in the training vocabulary because
+low-temperature text over-uses very frequent words; the metric measures spelling, not grammaticality or meaning.</p>
+
+<div class="tbl">
+<div class="tcap"><b>Table IV</b><br><b>Generated-word statistics by temperature</b></div>
+<table>
+<thead><tr><th>Temperature</th><th>Words</th><th>In train vocab.</th><th>Distinct</th></tr></thead>
+<tbody>
+<tr><td>0.5</td><td>1,582</td><td>99.1%</td><td>22.9%</td></tr>
+<tr><td>0.8</td><td>1,560</td><td>96.2%</td><td>33.8%</td></tr>
+<tr><td>1.0</td><td>1,490</td><td>93.2%</td><td>39.3%</td></tr>
+<tr><td>1.2</td><td>1,399</td><td>87.4%</td><td>48.9%</td></tr>
+<tr><td class="l">Real held-out text</td><td>&mdash;</td><td>94.3%</td><td>&mdash;</td></tr>
+</tbody></table>
+</div>
+
+<h3>C. Qualitative samples</h3>
+<p class="ni">At temperature 0.8 the model reproduces the corpus format&mdash;speaker labels, colons, line breaks and verse-like line
+lengths&mdash;and archaic vocabulary, but sentences are not coherent:</p>
+<pre>ROMEO:
+I think, there an extremest is my friends,
+For your fortune of battle persons,
+Being the bloody of the plague,
+That the advise of your own prayer,</pre>
+<p>At temperature 1.2, invented words appear:</p>
+<pre>I'll not dheed:
+As month I serve thee venom and cursed at the day?
+Ready copals the devil.</pre>
+
+<h2>VI. Interactive Interface and Deployment</h2>
+<p class="ni"><b>Chat.</b> The model is a text continuer, not an instruction-following assistant. To make it interactive we frame the
+conversation as a play script: the user&rsquo;s message is appended as <code>NAME:\n&lt;message&gt;\n\n</code> followed by the bot
+character&rsquo;s label, and the model generates until it emits a blank line, which ends a speech in the training data. Memory is
+limited by the 256-character context window, so earlier turns are quickly forgotten, and replies imitate the corpus rather than
+answering questions.</p>
+<p><b>Portability.</b> The code selects CUDA, Apple MPS or CPU automatically. Windows batch files (and an equivalent shell script for macOS and Linux) create a virtual environment, install
+PyTorch (the CUDA build when an NVIDIA GPU is detected) and start chat, generation or training with a double-click; the trained checkpoint
+(44.6&nbsp;MB) is distributed with the code so no training is required to run the model. The source code, checkpoint, training log and
+figure scripts are available at https://github.com/MouryaGowd/TinyLLM.</p>
+
+<h2>VII. Limitations</h2>
+<ul>
+  <li><b>Single run.</b> Results come from one training run with one seed; we report no variance and no ablations.</li>
+  <li><b>Evaluation split.</b> The validation split both selects the checkpoint and reports its loss, so Table&nbsp;III is
+  slightly optimistic; there is no separate test set.</li>
+  <li><b>Scale.</b> A 10.8&nbsp;M-parameter model trained on 1&nbsp;M characters cannot acquire semantic competence; outputs are stylistic imitation.</li>
+  <li><b>Metrics.</b> The lexical-validity measure does not assess grammar or meaning, and we conducted no human evaluation.</li>
+  <li><b>Scope.</b> We do not compare against other architectures (e.g., recurrent models) or tokenizers, and we do not benchmark the CUDA or CPU
+  paths.</li>
+</ul>
+
+<h2>VIII. Conclusion</h2>
+<p class="ni">We built and trained a 10.76&nbsp;M-parameter character-level GPT from scratch on a laptop in 27 minutes. It reaches 1.50 nats/character
+on held-out text, a 40% reduction in loss over a bigram baseline, and learns the format and vocabulary of its corpus while overfitting
+after about 40 epochs. Temperature experiments quantify the trade-off between valid words and diversity. Natural extensions are subword
+tokenization, a learning-rate schedule, a larger corpus, a held-out test set, and instruction fine-tuning to turn the text continuer into
+a dialogue system.</p>
+
+<h2>References</h2>
+<div class="refs">
+<p>[1] A. Vaswani <i>et al.</i>, &ldquo;Attention is all you need,&rdquo; in <i>Advances in Neural Information Processing Systems 30</i>, 2017.</p>
+<p>[2] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and I. Sutskever, &ldquo;Language models are unsupervised multitask learners,&rdquo; OpenAI, Tech. Rep., 2019.</p>
+<p>[3] A. Karpathy, &ldquo;nanoGPT,&rdquo; GitHub repository, 2022. [Online]. Available: https://github.com/karpathy/nanoGPT</p>
+<p>[4] A. Karpathy, &ldquo;char-rnn (Tiny Shakespeare dataset),&rdquo; GitHub repository, 2015. [Online]. Available: https://github.com/karpathy/char-rnn</p>
+<p>[5] R. Al-Rfou, D. Choe, N. Constant, M. Guo, and L. Jones, &ldquo;Character-level language modeling with deeper self-attention,&rdquo; in <i>Proc. AAAI Conf. Artificial Intelligence</i>, 2019.</p>
+<p>[6] R. Xiong <i>et al.</i>, &ldquo;On layer normalization in the transformer architecture,&rdquo; in <i>Proc. Int. Conf. Machine Learning (ICML)</i>, 2020.</p>
+<p>[7] O. Press and L. Wolf, &ldquo;Using the output embedding to improve language models,&rdquo; in <i>Proc. Conf. European Chapter of the ACL (EACL)</i>, 2017.</p>
+<p>[8] D. Hendrycks and K. Gimpel, &ldquo;Gaussian error linear units (GELUs),&rdquo; arXiv:1606.08415, 2016.</p>
+<p>[9] I. Loshchilov and F. Hutter, &ldquo;Decoupled weight decay regularization,&rdquo; in <i>Proc. Int. Conf. Learning Representations (ICLR)</i>, 2019.</p>
+<p>[10] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdinov, &ldquo;Dropout: A simple way to prevent neural networks from overfitting,&rdquo; <i>J. Mach. Learn. Res.</i>, vol. 15, 2014.</p>
+<p>[11] A. Fan, M. Lewis, and Y. Dauphin, &ldquo;Hierarchical neural story generation,&rdquo; in <i>Proc. Annu. Meeting Assoc. Computational Linguistics (ACL)</i>, 2018.</p>
+<p>[12] A. Holtzman, J. Buys, L. Du, M. Forbes, and Y. Choi, &ldquo;The curious case of neural text degeneration,&rdquo; in <i>Proc. ICLR</i>, 2020.</p>
+<p>[13] A. Paszke <i>et al.</i>, &ldquo;PyTorch: An imperative style, high-performance deep learning library,&rdquo; in <i>Advances in Neural Information Processing Systems 32</i>, 2019.</p>
+<p>[14] J. L. Ba, J. R. Kiros, and G. E. Hinton, &ldquo;Layer normalization,&rdquo; arXiv:1607.06450, 2016.</p>
+<p>[15] K. He, X. Zhang, S. Ren, and J. Sun, &ldquo;Deep residual learning for image recognition,&rdquo; in <i>Proc. IEEE Conf. Computer Vision and Pattern Recognition (CVPR)</i>, 2016.</p>
+</div>
+
+</div>
+</body>
+</html>

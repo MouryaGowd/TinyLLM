@@ -1,0 +1,25 @@
+device: mps
+1,115,394 chars, vocab 65
+10.76M parameters
+iter     0 | train 4.2046 | val 4.2069 | 10s
+iter   250 | train 2.3929 | val 2.4172 | 89s
+iter   500 | train 2.0884 | val 2.1629 | 176s
+iter   750 | train 1.8108 | val 1.9487 | 260s
+iter  1000 | train 1.6595 | val 1.8295 | 351s
+iter  1250 | train 1.5407 | val 1.7290 | 435s
+iter  1500 | train 1.4831 | val 1.6747 | 519s
+iter  1750 | train 1.4206 | val 1.6440 | 603s
+iter  2000 | train 1.3919 | val 1.6081 | 685s
+iter  2250 | train 1.3528 | val 1.5844 | 767s
+iter  2500 | train 1.3234 | val 1.5621 | 850s
+iter  2750 | train 1.2975 | val 1.5424 | 932s
+iter  3000 | train 1.2676 | val 1.5382 | 1014s
+iter  3250 | train 1.2547 | val 1.4987 | 1092s
+iter  3500 | train 1.2339 | val 1.5054 | 1169s
+iter  3750 | train 1.2139 | val 1.4986 | 1246s
+iter  4000 | train 1.1967 | val 1.4833 | 1327s
+iter  4250 | train 1.1826 | val 1.4862 | 1407s
+iter  4500 | train 1.1713 | val 1.4971 | 1485s
+iter  4750 | train 1.1537 | val 1.4933 | 1563s
+iter  5000 | train 1.1338 | val 1.4863 | 1640s
+done. best val loss 1.4833, saved to ckpt.pt
